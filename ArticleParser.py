@@ -18,8 +18,9 @@ re_script = re.compile(r'<(script).*?</\1>(?s)')
 re_comment = re.compile(r'(<!--.*?-->)')
 re_teg = re.compile(r'<[^<>]+>')
 
-re_word = re.compile(r'^[\w]+')
-re_helper = re.compile(r'(\.|,|-|\!|\?){1}')
+re_not_word = re.compile(r'^[\w]+')
+re_word = re.compile(r'.*[\w]+.*')
+re_helper = re.compile(r'(\.|,|\!|\?|\:|\(|\)){1}')
 
 def clean_string(str_input):
 	str_input = re_new_line.sub(' ', str_input)
@@ -30,15 +31,19 @@ def clean_string(str_input):
 
 def parse_adressa():
 	collection = MongoClient('localhost', 27017).adressa.article
-	cursor = collection.find(
-		{
-			'url' : 'http://adressa.no/kultur/article57961.ece'
-		}
-	)
 	cursor = collection.find()
 
 	count = 0
 	for doc in cursor:
+		proper = doc.get('proper', None)
+
+		if (proper is not None):
+			continue
+
+		url = doc.get('url', None)
+		if url is None:
+			continue
+
 		html = doc.get('html', None)
 		if html is None:
 			continue
@@ -51,21 +56,63 @@ def parse_adressa():
 		words_body = []
 
 		soup = BeautifulSoup(html, 'html.parser')
-		for key in [('header', 'article-header'), ('body', 'article-body')]:
+		for key in [('header', 'article-header'), ('body', 'body')]:
 			words = []
 			for tag in soup.find_all(class_=key[1]):
-				words = re_word.sub(' ', tag.text)
+				if ((key[0] is 'body') and
+						('article-body' not in tag.parent['class'])):
+					continue
+				words = re_not_word.sub(' ', tag.text)
 				words = re_helper.sub(' ', words)
 				words = re_white_spaces.sub(' ', words)
 				words = words.strip().split(' ')
-			if key[0] is 'header':
-			 	words_header += words
-			else:
-			 	words_body += words
+
+			for word in words:
+				if len(word) <= 0:
+					continue
+				if (not re_word.match(word)):
+					continue
+
+				if key[0] is 'header':
+				 	words_header.append(word)
+				else:
+				 	words_body.append(word)
+
+		# This is for wordbase
+		words_header = set(words_header)
+		words_body = set(words_body)
 
 		# Bad article
 		if (len(words_header) == 0) or (len(words_body) < 10):
-			print len(words_header), len(words_body)
+			collection.update(
+				{
+					'url': url
+				},
+				{
+					"$set": {
+						'proper':False,
+					}
+				},
+				upsert=True
+			)
+			continue
+
+		collection.update(
+			{
+				'url': url
+			},
+			{
+				"$set": {
+					'words_header': sorted(words_header),
+					'words_body': sorted(words_body),
+					'proper':True,
+				}
+			},
+			upsert=True
+		)
+
+		print len(words_header), len(words_body)
 
 if __name__ == '__main__':
 	parse_adressa()
+

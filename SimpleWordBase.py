@@ -428,7 +428,7 @@ def article_crawling_from_list():
 					err_f.write('DB : ' + url + '\n')
 #					err_f.write(e + '\n')
 				pass
-			time.sleep(5)
+#			time.sleep(5)
 
 	f.close()
 
