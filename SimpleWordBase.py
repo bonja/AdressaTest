@@ -9,6 +9,7 @@ import re
 
 import numpy as np
 from pymongo import MongoClient
+import pymongo
 
 from bs4 import BeautifulSoup
 
@@ -361,36 +362,60 @@ def word_based_predict(u={}, word_dic={}, s_seq=100, predicts=10):
 
 def article_crawling_from_list():
 	url_list_file = '/home/darkgs/Workspace/AdressaTest/one_week_url.txt'
-	db = MongoClient('localhost', 27017)
-	collection = db.adressa_article
+	collection = MongoClient('localhost', 27017).adressa.article
+
+	cursor = collection.find()
+
+	url_in_db = []
+
+	for doc in cursor:
+		url = doc.get('url', None)
+		if url is None:
+			continue
+
+		url_in_db.append(url)
 
 	count = 0
 	with open(url_list_file, 'r') as f:
-		for line in iter(f.readline, ''):
-			if (len(line) <= 0):
+		for url in iter(f.readline, ''):
+			url = url.rstrip()
+		
+			if (len(url) <= 0):
 				continue
 
 			# 34175 - 30638 = 3,537 filtered
-			if re.match('.*(r\.search\.yahoo\.com).*|.*(l\.facebook\.com).*', line):
+			if re.match('.*(r\.search\.yahoo\.com).*|.*(l\.facebook\.com).*', url):
+				continue
+
+			if url in url_in_db:
 				continue
 
 			# 30,638
 			count += 1
 
 			try:
-				time.sleep(15)
 				response, content = httplib2.Http().request(url)
-
-				soup = BeautifulSoup(content, 'html.parser')
-
-				db_entry = {
-					'url': url,
-					'html': soup.get_text()
-				}
-
-				collection.insert_one(db_entry)
-			except:
+			except Exception as e:
+				with open('/home/darkgs/Workspace/AdressaTest/error.txt', 'a') as err_f:
+					err_f.write('HTTP : ' + url + '\n')
+					err_f.write(str(e) + '\n')
 				continue
+
+			soup = BeautifulSoup(content, 'html.parser')
+
+			db_entry = {
+				'url': url,
+				'html': soup.get_text()
+			}
+
+			try:
+				collection.insert_one(db_entry)
+			except Exception as e:
+				with open('/home/darkgs/Workspace/AdressaTest/error.txt', 'a') as err_f:
+					err_f.write('DB : ' + url + '\n')
+					err_f.write(e + '\n')
+				pass
+			time.sleep(15)
 
 	print count
 	f.close()
@@ -400,6 +425,10 @@ if __name__ == '__main__':
 #	u, word_dic, count = word_based(seq_count=15000)
 #	hit, total = word_based_predict(u=u, word_dic=word_dic, s_seq=15000, predicts=5000)
 #	article_crawling_all()
+
+#	adressa_db = MongoClient('localhost', 27017).adressa
+#	collection = adressa_db.article
+#	collection.create_index( [("url", pymongo.ASCENDING)], unique=True)
 
 	article_crawling_from_list()
 
