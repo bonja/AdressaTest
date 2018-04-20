@@ -13,6 +13,21 @@ import pymongo
 
 from bs4 import BeautifulSoup
 
+re_white_spaces = re.compile(r'[\s]+')
+re_new_line = re.compile(r'[\t\n\r]')
+re_quote = re.compile(r'[\"\']+')
+re_script = re.compile(r'<script.+script>')
+
+re_article_header = re.compile(r'article-header')
+
+def clean_string(str_input):
+	str_input = re_new_line.sub(' ', str_input)
+	str_input = re_white_spaces.sub(' ', str_input)
+#	str_input = re_quote.sub('', str_input)
+	str_input = re_script.sub('', str_input)
+
+	return str_input
+
 data_set = [
 	'/home/darkgs/Dataset/Adressa/three_month/20170301',
 	'/home/darkgs/Dataset/Adressa/three_month/20170302',
@@ -401,11 +416,9 @@ def article_crawling_from_list():
 					err_f.write(str(e) + '\n')
 				continue
 
-			soup = BeautifulSoup(content, 'html.parser')
-
 			db_entry = {
 				'url': url,
-				'html': soup.get_text()
+				'html': content
 			}
 
 			try:
@@ -413,11 +426,10 @@ def article_crawling_from_list():
 			except Exception as e:
 				with open('/home/darkgs/Workspace/AdressaTest/error.txt', 'a') as err_f:
 					err_f.write('DB : ' + url + '\n')
-					err_f.write(e + '\n')
+#					err_f.write(e + '\n')
 				pass
-			time.sleep(15)
+			time.sleep(5)
 
-	print count
 	f.close()
 
 if __name__ == '__main__':
@@ -431,5 +443,4 @@ if __name__ == '__main__':
 #	collection.create_index( [("url", pymongo.ASCENDING)], unique=True)
 
 	article_crawling_from_list()
-
 
